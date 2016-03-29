@@ -6,3 +6,139 @@ Total Mean error	62.683692
 Total Median error	53.300000
 Total 67% error	71.900000
 
+MLP-0.01.pickle
+Total Test size	5384
+Total Max error	1398.900000
+Total Min error	1.100000
+Total Mean error	61.739339
+Total Median error	52.300000
+Total 67% error	71.500000
+
+MLP-0.01.pickle
+Total Test size	5384
+Total Max error	1398.900000
+Total Min error	1.100000
+Total Mean error	61.739339
+Total Median error	52.300000
+Total 67% error	71.500000
+
+MLP-0.2.pickle
+Total Test size	5384
+Total Max error	546.300000
+Total Min error	23.300000
+Total Mean error	319.350353
+Total Median error	328.350000
+Total 67% error	369.800000
+
+MLP-0.2.pickle
+Total Test size	5384
+Total Max error	661.000000
+Total Min error	6.800000
+Total Mean error	237.492403
+Total Median error	225.100000
+Total 67% error	276.600000
+
+MLP-0.2.pickle
+Total Test size	5384
+Total Max error	608.900000
+Total Min error	7.700000
+Total Mean error	260.332467
+Total Median error	256.900000
+Total 67% error	305.200000
+
+MLP-0.2.pickle
+Total Test size	5384
+Total Max error	779.300000
+Total Min error	0.600000
+Total Mean error	308.055906
+Total Median error	269.700000
+Total 67% error	438.500000
+
+MLP-0.2.pickle
+Total Test size	5384
+Total Max error	779.300000
+Total Min error	0.600000
+Total Mean error	284.615305
+Total Median error	214.850000
+Total 67% error	405.300000
+
+MLP-0.2.pickle
+Total Test size	5384
+Total Max error	646.000000
+Total Min error	7.000000
+Total Mean error	250.764004
+Total Median error	246.000000
+Total 67% error	298.600000
+Total 80% error	343.600000
+Total 90% error	390.600000
+
+MLP-0.2.pickle
+Total Test size	5384
+Total Max error	646.000000
+Total Min error	7.000000
+Total Mean error	250.764004
+Total Median error	246.000000
+Total 67% error	298.600000
+Total 80% error	343.600000
+Total 90% error	390.600000
+
+MLP-0.2.pickle
+Total Test size	5384
+Total Max error	946.900000
+Total Min error	0.200000
+Total Mean error	105.552935
+Total Median error	68.600000
+Total 67% error	105.500000
+Total 80% error	157.600000
+Total 90% error	253.400000
+
+MLP-0.2.pickle
+Total Test size	5384
+Total Max error	1134.600000
+Total Min error	0.100000
+Total Mean error	114.796452
+Total Median error	57.500000
+Total 67% error	98.100000
+Total 80% error	156.400000
+Total 90% error	313.200000
+
+MLP-0.2.pickle
+Total Test size	5384
+Total Max error	1014.200000
+Total Min error	0.500000
+Total Mean error	103.933562
+Total Median error	63.450000
+Total 67% error	99.200000
+Total 80% error	147.100000
+Total 90% error	249.600000
+
+MLP-0.2.pickle
+Total Test size	5384
+Total Max error	1064.800000
+Total Min error	0.400000
+Total Mean error	123.321842
+Total Median error	65.500000
+Total 67% error	105.400000
+Total 80% error	186.400000
+Total 90% error	338.800000
+
+MLP-0.2.pickle
+Total Test size	5384
+Total Max error	813.200000
+Total Min error	0.100000
+Total Mean error	83.979458
+Total Median error	55.500000
+Total 67% error	83.800000
+Total 80% error	118.100000
+Total 90% error	189.200000
+
+MLP-0.2.pickle
+Total Test size	5384
+Total Max error	1158.200000
+Total Min error	0.500000
+Total Mean error	91.931909
+Total Median error	52.250000
+Total 67% error	82.800000
+Total 80% error	118.500000
+Total 90% error	205.900000
+

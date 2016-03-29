@@ -12,7 +12,8 @@ import theano.tensor as T
 from keras.models import Graph
 from keras.layers.core import Dense, Dropout, Activation, Merge, Reshape, Flatten
 from keras.layers.embeddings import Embedding
-from keras.optimizers import SGD
+from keras.optimizers import SGD, Adagrad
+from keras.utils.visualize_util import plot
 
 from utils import preprocess, make_vocab, compute_error
 
@@ -28,11 +29,13 @@ def gen_report(true_pts, pred_pts, pickle_name):
     f_report.write('Total Min error\t%f\n' % np.min(tot_error)) 
     f_report.write('Total Mean error\t%f\n' % np.mean(tot_error)) 
     f_report.write('Total Median error\t%f\n' % np.median(tot_error)) 
-    f_report.write('Total 67%% error\t%f\n\n' % tot_error[int(len(tot_error) * 0.67)])
+    f_report.write('Total 67%% error\t%f\n' % tot_error[int(len(tot_error) * 0.67)])
+    f_report.write('Total 80%% error\t%f\n' % tot_error[int(len(tot_error) * 0.8)])
+    f_report.write('Total 90%% error\t%f\n\n' % tot_error[int(len(tot_error) * 0.9)])
 
-def build_mlp(n_con, n_dis, dis_dims, vocab_sizes):
-    emb_size=20
-    hidden_size=800
+def build_mlp(n_con, n_dis, dis_dims, vocab_sizes, n_grid):
+    emb_size=10
+    hidden_size=500
     assert(n_dis == len(dis_dims) == len(vocab_sizes))
     # Define a graph
     network = Graph()
@@ -41,19 +44,21 @@ def build_mlp(n_con, n_dis, dis_dims, vocab_sizes):
     input_layers = []
     network.add_input(name='con_input', input_shape=(n_con,))
     input_layers.append('con_input')
+    ## embedding inputs
     for i in range(n_dis):
         network.add_input(name='emb_input%d' % i, input_shape=(dis_dims[i],), dtype=int)
         network.add_node(Embedding(input_dim=vocab_sizes[i], output_dim=emb_size, input_length=dis_dims[i]), name='emb%d' % i, input='emb_input%d' % i)
-        network.add_node(Flatten(), name='re_emb%d' % i, input='emb%d' % i)
-        input_layers.append('re_emb%d' % i)
+        network.add_node(Flatten(), name='fla_emb%d' % i, input='emb%d' % i)
+        input_layers.append('fla_emb%d' % i)
     
     # Hidden Layer
     network.add_node(layer=Dense(hidden_size), name='hidden1', inputs=input_layers, merge_mode='concat')
-    network.add_node(Activation('relu'), name='hidden1_act', input='hidden1')
+    network.add_node(Activation('tanh'), name='hidden1_act', input='hidden1')
 
     # Ouput Layer
-    network.add_node(Dense(2), name='hidden2', input='hidden1_act')
-    network.add_output(name='output', input='hidden2')
+    network.add_node(Dense(n_grid), name='hidden2', input='hidden1_act')
+    network.add_node(Activation('softmax'), name='hidden2_act', input='hidden2')
+    network.add_output(name='output', input='hidden2_act')
 
     return network
 
@@ -129,7 +134,9 @@ def main(num_epochs=500):
     eng_para = pd.read_csv('data/2g_gongcan.csv')
 #eng_para = eng_para.loc[:, ['LAC', 'CI', 'Angle', 'Longitude', 'Latitude', 'Power', 'GSM Neighbor Count', 'TD Neighbor Count']]
     tr_feature, tr_label, tr_ids = load_dataset('data/forward_recovered.csv', eng_para, True) 
+    tr_label = pickle.load(open('data/tr_label.pkl'))
     te_feature, te_label, te_ids = load_dataset('data/backward_recovered.csv', eng_para, False)
+    #te_label = pickle.load(open('data/te_label.pkl'))
     ## !!! maybe here need to ensure train data are the same shape as test data
     train_size, n_con = tr_feature.shape
     test_size, n_con = te_feature.shape
@@ -162,28 +169,18 @@ def main(num_epochs=500):
 
     print 'Building model and compiling functions ...'
     # Define network structure
-    network = build_mlp(n_con, n_dis, dis_dims, vocab_sizes)
+    grid_info = np.asarray(pickle.load(open('data/grid_center.pkl')))
+    network = build_mlp(n_con, n_dis, dis_dims, vocab_sizes, len(grid_info))
 
-    network.compile(loss={'output': 'mean_squared_error'}, optimizer=SGD(lr=1e-4, momentum=0.9, nesterov=True))
+#network.compile(loss={'output': 'categorical_crossentropy'}, optimizer=SGD(lr=1e-2, momentum=0.9, nesterov=True))
+    network.compile(loss={'output': 'categorical_crossentropy'}, optimizer=Adagrad())
     
     # Build network
+    pickle_name = 'MLP-0.2.pickle'
 
-    pickle_name = 'MLP-0.01.pickle'
-
-    mul_val = 10000.
-    lon_offset = np.mean(tr_label[:, 0])
-    lon_std = np.mean(tr_label[:, 0])
-    lat_offset = np.mean(tr_label[:, 1])
-    lat_std = np.mean(tr_label[:, 1])
-    ######## Change Target
-    tr_label[:, 0] = (tr_label[:, 0] - lon_offset) * mul_val 
-    tr_label[:, 1] = (tr_label[:, 1] - lat_offset) * mul_val 
-    tr_label = tr_label.astype(np.float32)
-    print tr_label
-
-    is_train = True
+    is_train = False
     if is_train:
-        build_log = network.fit(tr_input, nb_epoch=100, batch_size=10, verbose=1)
+        build_log = network.fit(tr_input, nb_epoch=1000, batch_size=50, verbose=2)
         # Dump Network
         with open('model/'+pickle_name, 'wb') as f:
            pickle.dump(network, f, -1)
@@ -191,12 +188,16 @@ def main(num_epochs=500):
         # Load Network
         f = open('model/'+pickle_name)
         network = pickle.load(f) 
+    plot(network, to_file='model.png')
 
     # Make prediction
-    te_pred = network.predict(te_input)['output']
-
-    te_pred[:, 0] = te_pred[:, 0] / mul_val + lon_offset
-    te_pred[:, 1] = te_pred[:, 1] / mul_val + lat_offset
+    te_pred = np.asarray(network.predict(te_input)['output'])
+    ## weighted
+#    te_pred = te_pred.dot(grid_info)
+    ## argmax
+    te_pred = np.argmax(te_pred, axis=1)
+    te_pred = [grid_info[idx] for idx in te_pred]
+        
     f_out = open('pred.csv', 'w')
     for pred_pt, true_pt in zip(te_pred, te_label):
         f_out.write('%f,%f,%f,%f\n' % (pred_pt[0], pred_pt[1], true_pt[0], true_pt[1]))
