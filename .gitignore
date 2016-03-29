@@ -1,2 +1,7 @@
+# directory 
 data/
 model/
+
+# python compile file
+*.pyc
+*.csv

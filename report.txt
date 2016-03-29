@@ -1,0 +1,8 @@
+MLP-0.01.pickle
+Total Test size	5384
+Total Max error	1956.600000
+Total Min error	0.300000
+Total Mean error	62.683692
+Total Median error	53.300000
+Total 67% error	71.900000
+

@@ -9,16 +9,12 @@ import math
 import pandas as pd
 import theano
 import theano.tensor as T
-from nolearn.lasagne import NeuralNet
-from nolearn.lasagne.base import BatchIterator, TrainSplit
-from sklearn.datasets import make_regression
+from keras.models import Graph
+from keras.layers.core import Dense, Dropout, Activation, Merge, Reshape, Flatten
+from keras.layers.embeddings import Embedding
+from keras.optimizers import SGD
 
-import lasagne
-from lasagne.regularization import regularize_layer_params_weighted, l2, l1
-from lasagne.updates import nesterov_momentum
-
-from rf import compute_error
-from utils import preprocess, make_vocab
+from utils import preprocess, make_vocab, compute_error
 
 def gen_report(true_pts, pred_pts, pickle_name):
     tot_error = []
@@ -38,29 +34,28 @@ def build_mlp(n_con, n_dis, dis_dims, vocab_sizes):
     emb_size=20
     hidden_size=800
     assert(n_dis == len(dis_dims) == len(vocab_sizes))
+    # Define a graph
+    network = Graph()
+
     # Input Layer
-    network = lasagne.layers.InputLayer(shape=(None, n_con), name='con_input')
+    input_layers = []
+    network.add_input(name='con_input', input_shape=(n_con,))
+    input_layers.append('con_input')
     for i in range(n_dis):
-#        emb_input_var = T.imatrix('emb_input_var%d' % i)
-        emb_input = lasagne.layers.InputLayer(shape=(None, dis_dims[i]), name='emb_input%d'%i, input_var=T.imatrix('emb_input_var%d' % i))
+        network.add_input(name='emb_input%d' % i, input_shape=(dis_dims[i],), dtype=int)
+        network.add_node(Embedding(input_dim=vocab_sizes[i], output_dim=emb_size, input_length=dis_dims[i]), name='emb%d' % i, input='emb_input%d' % i)
+        network.add_node(Flatten(), name='re_emb%d' % i, input='emb%d' % i)
+        input_layers.append('re_emb%d' % i)
     
-        # Embedding Layer
-        emb_layer = lasagne.layers.EmbeddingLayer(emb_input, input_size=vocab_sizes[i], output_size=emb_size)
-        emb_layer = lasagne.layers.ReshapeLayer(emb_layer, (-1, dis_dims[i]*emb_size))
-        # Concatenate Embedding feature and Common features
-        network = lasagne.layers.ConcatLayer([network, emb_layer])
-    print 'Feature Size\t%d' % (n_con+sum(dis_dims)*emb_size)
+    # Hidden Layer
+    network.add_node(layer=Dense(hidden_size), name='hidden1', inputs=input_layers, merge_mode='concat')
+    network.add_node(Activation('relu'), name='hidden1_act', input='hidden1')
 
-#    network = lasagne.layers.DropoutLayer(network, p=0.2)
-    # Hidden Layer (Full-Connected Layer)
-    for layer in range(1):
-        network = lasagne.layers.DenseLayer(network, num_units=hidden_size, nonlinearity=lasagne.nonlinearities.rectify)
-#        network = lasagne.layers.DropoutLayer(network, p=0.3)
+    # Ouput Layer
+    network.add_node(Dense(2), name='hidden2', input='hidden1_act')
+    network.add_output(name='output', input='hidden2')
 
-    # Output Layer
-    l_output = lasagne.layers.DenseLayer(network, num_units=2, nonlinearity=None)
-
-    return l_output
+    return network
 
 def permutate_to_augment(df):
     for i in range(len(df)):
@@ -144,7 +139,7 @@ def main(num_epochs=500):
     print 'Preprocessing data ...'
     # Standardize continous input
     tr_feature, te_feature = preprocess(tr_feature, te_feature)
-    tr_input = {'con_input' : tr_feature}
+    tr_input = {'con_input' : tr_feature, 'output' : tr_label}
     te_input = {'con_input' : te_feature}
     # Prepare embedding input
     dis_dims, vocab_sizes = [], []
@@ -167,24 +162,13 @@ def main(num_epochs=500):
 
     print 'Building model and compiling functions ...'
     # Define network structure
-    l_output = build_mlp(n_con, n_dis, dis_dims, vocab_sizes)
+    network = build_mlp(n_con, n_dis, dis_dims, vocab_sizes)
+
+    network.compile(loss={'output': 'mean_squared_error'}, optimizer=SGD(lr=1e-4, momentum=0.9, nesterov=True))
     
-    # Set batch size
-    bi = BatchIterator(batch_size=10)
-
     # Build network
-    network = NeuralNet(l_output,
-                 regression=True,
-                 update_learning_rate=1e-5,
-                 update=nesterov_momentum,
-                 update_momentum=0.9,
-                 train_split=TrainSplit(eval_size=0.05),
-                 verbose=1,
-                 batch_iterator_train=bi,
-                 objective_loss_function=lasagne.objectives.squared_error,
-                 max_epochs=5000)
 
-    pickle_name = 'MLP-0.10.pickle'
+    pickle_name = 'MLP-0.01.pickle'
 
     mul_val = 10000.
     lon_offset = np.mean(tr_label[:, 0])
@@ -199,7 +183,7 @@ def main(num_epochs=500):
 
     is_train = True
     if is_train:
-        network.fit(tr_input, tr_label)
+        build_log = network.fit(tr_input, nb_epoch=100, batch_size=10, verbose=1)
         # Dump Network
         with open('model/'+pickle_name, 'wb') as f:
            pickle.dump(network, f, -1)
@@ -209,7 +193,7 @@ def main(num_epochs=500):
         network = pickle.load(f) 
 
     # Make prediction
-    te_pred = network.predict(te_input)
+    te_pred = network.predict(te_input)['output']
 
     te_pred[:, 0] = te_pred[:, 0] / mul_val + lon_offset
     te_pred[:, 1] = te_pred[:, 1] / mul_val + lat_offset
