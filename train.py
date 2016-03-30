@@ -35,7 +35,7 @@ def gen_report(true_pts, pred_pts, pickle_name, params):
                        tot_error[int(len(tot_error)*0.8)], \
                        tot_error[int(len(tot_error)*0.9)] \
                     ])
-    f_report.write('\t'.join(report_content) + '\n')
+    f_report.write(','.join(report_content) + '\n')
     f_report.flush()
 #    f_report.write('Total Max error\t%f\n' % np.max(tot_error)) 
 #    f_report.write('Total Min error\t%f\n' % np.min(tot_error)) 
@@ -191,7 +191,7 @@ def main(optimizer, batch_size, hidden_size):
 
     is_train = True
     if is_train:
-        build_log = network.fit(tr_input, nb_epoch=500, batch_size=batch_size, verbose=2)
+        history = network.fit(tr_input, nb_epoch=500, batch_size=batch_size, verbose=1)
         # Dump Network
         with open('model/'+pickle_name, 'wb') as f:
            pickle.dump(network, f, -1)
@@ -209,15 +209,15 @@ def main(optimizer, batch_size, hidden_size):
     gen_report(te_label, te_pred, pickle_name, [type(optimizer), batch_size, hidden_size, 'Weighted'])
 
     ## 2. argmax
-    te_pred = np.asarray(network.predict(te_input)['output'])
-    te_pred = np.argmax(te_pred, axis=1)
-    te_pred = [grid_info[idx] for idx in te_pred]
+#    te_pred = np.asarray(network.predict(te_input)['output'])
+#    te_pred = np.argmax(te_pred, axis=1)
+#    te_pred = [grid_info[idx] for idx in te_pred]
     # Generate report
-    gen_report(te_label, te_pred, pickle_name, [type(optimizer), batch_size, hidden_size, 'Argmax'])
+#    gen_report(te_label, te_pred, pickle_name, [type(optimizer), batch_size, hidden_size, 'Argmax'])
         
-#    f_out = open('pred.csv', 'w')
-#    for pred_pt, true_pt in zip(te_pred, te_label):
-#        f_out.write('%f,%f,%f,%f\n' % (pred_pt[0], pred_pt[1], true_pt[0], true_pt[1]))
+    f_out = open('pred.csv', 'w')
+    for pred_pt, true_pt in zip(te_pred, te_label):
+        f_out.write('%f,%f,%f,%f\n' % (pred_pt[0], pred_pt[1], true_pt[0], true_pt[1]))
 
     # Generate report
 #gen_report(te_label, te_pred, pickle_name, [type(optimizer), batch_size, hidden_size])
@@ -225,12 +225,13 @@ def main(optimizer, batch_size, hidden_size):
 
 
 if __name__ == '__main__':
-    '''
+    
     params = {
         'optimizer' : Adagrad(),
         'batch_size' : 50,
-        'hidden_size' : 800,
+        'hidden_size' : 500,
     }
+    main(**params) 
     '''
     optimizer = zip_name('optimizer', \
             [Adagrad(), Adadelta(), SGD(lr=1e-4, decay=1e-6, momentum=0.9, nesterov=True)])
@@ -243,3 +244,4 @@ if __name__ == '__main__':
     for i, item in enumerate(itertools.product(*param_list), start=1):
         params = dict(item)
         main(**params)
+    '''
