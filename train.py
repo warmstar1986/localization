@@ -12,30 +12,41 @@ import theano.tensor as T
 from keras.models import Graph
 from keras.layers.core import Dense, Dropout, Activation, Merge, Reshape, Flatten
 from keras.layers.embeddings import Embedding
-from keras.optimizers import SGD, Adagrad
+from keras.optimizers import SGD, Adagrad, Adadelta
 from keras.utils.visualize_util import plot
 
-from utils import preprocess, make_vocab, compute_error
+from utils import preprocess, make_vocab, compute_error, zip_name, to_string
 
-def gen_report(true_pts, pred_pts, pickle_name):
+def gen_report(true_pts, pred_pts, pickle_name, params):
     tot_error = []
     for true_pt, pred_pt in zip(true_pts, pred_pts):
         tot_error.append(compute_error(pred_pt, true_pt))
     f_report = open('report.txt', 'a')
-    f_report.write(pickle_name + '\n')
-    f_report.write('Total Test size\t%d\n' % len(tot_error))
+    report_content = to_string(params)
+#    f_report.write(pickle_name + '\n')
+#    f_report.write('Total Test size\t%d\n' % len(tot_error))
+    report_content.append(str(len(tot_error)))
     tot_error = sorted(tot_error)
-    f_report.write('Total Max error\t%f\n' % np.max(tot_error)) 
-    f_report.write('Total Min error\t%f\n' % np.min(tot_error)) 
-    f_report.write('Total Mean error\t%f\n' % np.mean(tot_error)) 
-    f_report.write('Total Median error\t%f\n' % np.median(tot_error)) 
-    f_report.write('Total 67%% error\t%f\n' % tot_error[int(len(tot_error) * 0.67)])
-    f_report.write('Total 80%% error\t%f\n' % tot_error[int(len(tot_error) * 0.8)])
-    f_report.write('Total 90%% error\t%f\n\n' % tot_error[int(len(tot_error) * 0.9)])
+    report_content += to_string([np.max(tot_error), \
+                       np.min(tot_error), \
+                       np.mean(tot_error), \
+                       np.median(tot_error), \
+                       tot_error[int(len(tot_error)*0.67)], \
+                       tot_error[int(len(tot_error)*0.8)], \
+                       tot_error[int(len(tot_error)*0.9)] \
+                    ])
+    f_report.write('\t'.join(report_content) + '\n')
+    f_report.flush()
+#    f_report.write('Total Max error\t%f\n' % np.max(tot_error)) 
+#    f_report.write('Total Min error\t%f\n' % np.min(tot_error)) 
+#    f_report.write('Total Mean error\t%f\n' % np.mean(tot_error)) 
+#    f_report.write('Total Median error\t%f\n' % np.median(tot_error)) 
+#    f_report.write('Total 67%% error\t%f\n' % tot_error[int(len(tot_error) * 0.67)])
+#    f_report.write('Total 80%% error\t%f\n' % tot_error[int(len(tot_error) * 0.8)])
+#    f_report.write('Total 90%% error\t%f\n\n' % tot_error[int(len(tot_error) * 0.9)])
 
-def build_mlp(n_con, n_dis, dis_dims, vocab_sizes, n_grid):
+def build_mlp(n_con, n_dis, dis_dims, vocab_sizes, n_grid, hidden_size=800):
     emb_size=10
-    hidden_size=500
     assert(n_dis == len(dis_dims) == len(vocab_sizes))
     # Define a graph
     network = Graph()
@@ -128,7 +139,7 @@ def load_dataset(f_name, eng_para, augment=False):
 
     return df.values, label, [lacci_vals, bsic_vals, arfcn_vals]
 
-def main(num_epochs=500):
+def main(optimizer, batch_size, hidden_size):
     # Load the dataset
     print 'Loading dataset ...'
     eng_para = pd.read_csv('data/2g_gongcan.csv')
@@ -170,17 +181,17 @@ def main(num_epochs=500):
     print 'Building model and compiling functions ...'
     # Define network structure
     grid_info = np.asarray(pickle.load(open('data/grid_center.pkl')))
-    network = build_mlp(n_con, n_dis, dis_dims, vocab_sizes, len(grid_info))
+    network = build_mlp(n_con, n_dis, dis_dims, vocab_sizes, len(grid_info), hidden_size)
 
 #network.compile(loss={'output': 'categorical_crossentropy'}, optimizer=SGD(lr=1e-2, momentum=0.9, nesterov=True))
-    network.compile(loss={'output': 'categorical_crossentropy'}, optimizer=Adagrad())
+    network.compile(loss={'output': 'categorical_crossentropy'}, optimizer=optimizer)
     
     # Build network
     pickle_name = 'MLP-0.2.pickle'
 
-    is_train = False
+    is_train = True
     if is_train:
-        build_log = network.fit(tr_input, nb_epoch=1000, batch_size=50, verbose=2)
+        build_log = network.fit(tr_input, nb_epoch=500, batch_size=batch_size, verbose=2)
         # Dump Network
         with open('model/'+pickle_name, 'wb') as f:
            pickle.dump(network, f, -1)
@@ -192,18 +203,43 @@ def main(num_epochs=500):
 
     # Make prediction
     te_pred = np.asarray(network.predict(te_input)['output'])
-    ## weighted
-#    te_pred = te_pred.dot(grid_info)
-    ## argmax
+    ## 1. weighted
+    te_pred = te_pred.dot(grid_info)
+    # Generate report
+    gen_report(te_label, te_pred, pickle_name, [type(optimizer), batch_size, hidden_size, 'Weighted'])
+
+    ## 2. argmax
+    te_pred = np.asarray(network.predict(te_input)['output'])
     te_pred = np.argmax(te_pred, axis=1)
     te_pred = [grid_info[idx] for idx in te_pred]
+    # Generate report
+    gen_report(te_label, te_pred, pickle_name, [type(optimizer), batch_size, hidden_size, 'Argmax'])
         
-    f_out = open('pred.csv', 'w')
-    for pred_pt, true_pt in zip(te_pred, te_label):
-        f_out.write('%f,%f,%f,%f\n' % (pred_pt[0], pred_pt[1], true_pt[0], true_pt[1]))
+#    f_out = open('pred.csv', 'w')
+#    for pred_pt, true_pt in zip(te_pred, te_label):
+#        f_out.write('%f,%f,%f,%f\n' % (pred_pt[0], pred_pt[1], true_pt[0], true_pt[1]))
 
     # Generate report
-    gen_report(te_label, te_pred, pickle_name)
+#gen_report(te_label, te_pred, pickle_name, [type(optimizer), batch_size, hidden_size])
+
+
 
 if __name__ == '__main__':
-    main()
+    '''
+    params = {
+        'optimizer' : Adagrad(),
+        'batch_size' : 50,
+        'hidden_size' : 800,
+    }
+    '''
+    optimizer = zip_name('optimizer', \
+            [Adagrad(), Adadelta(), SGD(lr=1e-4, decay=1e-6, momentum=0.9, nesterov=True)])
+    batch_size = zip_name('batch_size', \
+            [10, 50, 100])
+    hidden_size = zip_name('hidden_size', \
+            [500, 800, 1500])
+
+    param_list = [optimizer, batch_size, hidden_size]
+    for i, item in enumerate(itertools.product(*param_list), start=1):
+        params = dict(item)
+        main(**params)

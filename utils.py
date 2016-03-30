@@ -22,6 +22,12 @@ def compute_error(true_pt, pred_pt):
     s = round(s * 10000) / 10
     return s
 
+def to_string(data):
+    return map(lambda x: str(x), data)
+
+def zip_name(name, data):
+    return zip([name]*len(data), data)
+
 def preprocess_(dataset):
     n, m = dataset.shape
     dataset = dataset.astype(np.float32)
