@@ -6,3 +6,23 @@ Total Mean error	62.683692
 Total Median error	53.300000
 Total 67% error	71.900000
 
+MLP-Sda-0.1
+Total Test size	5384
+Total Max error	849.700000
+Total Min error	0.400000
+Total Mean error	68.022604
+Total Median error	57.900000
+Total 67% error	78.100000
+Total 80% error	100.900000
+Total 90% error	132.800000
+
+MLP-Sda-0.1
+Total Test size	5384
+Total Max error	353.400000
+Total Min error	0.600000
+Total Mean error	70.157541
+Total Median error	60.200000
+Total 67% error	79.000000
+Total 80% error	102.600000
+Total 90% error	130.300000
+

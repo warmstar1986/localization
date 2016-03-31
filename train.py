@@ -9,30 +9,57 @@ import math
 import pandas as pd
 import theano
 import theano.tensor as T
-from keras.models import Graph
-from keras.layers.core import Dense, Dropout, Activation, Merge, Reshape, Flatten
+from keras.models import Graph, Sequential, model_from_json
+from keras.layers import containers
+from keras.layers.core import Dense, Dropout, Activation, Flatten, AutoEncoder
 from keras.layers.embeddings import Embedding
-from keras.optimizers import SGD
+from keras.optimizers import SGD, Adagrad
+from keras.utils.visualize_util import plot
 
 from utils import preprocess, make_vocab, compute_error
 
-def gen_report(true_pts, pred_pts, pickle_name):
+def gen_report(true_pts, pred_pts, network_name):
     tot_error = []
     for true_pt, pred_pt in zip(true_pts, pred_pts):
         tot_error.append(compute_error(pred_pt, true_pt))
     f_report = open('report.txt', 'a')
-    f_report.write(pickle_name + '\n')
+    f_report.write(network_name + '\n')
     f_report.write('Total Test size\t%d\n' % len(tot_error))
     tot_error = sorted(tot_error)
     f_report.write('Total Max error\t%f\n' % np.max(tot_error)) 
     f_report.write('Total Min error\t%f\n' % np.min(tot_error)) 
     f_report.write('Total Mean error\t%f\n' % np.mean(tot_error)) 
     f_report.write('Total Median error\t%f\n' % np.median(tot_error)) 
-    f_report.write('Total 67%% error\t%f\n\n' % tot_error[int(len(tot_error) * 0.67)])
+    f_report.write('Total 67%% error\t%f\n' % tot_error[int(len(tot_error) * 0.67)])
+    f_report.write('Total 80%% error\t%f\n' % tot_error[int(len(tot_error) * 0.8)])
+    f_report.write('Total 90%% error\t%f\n\n' % tot_error[int(len(tot_error) * 0.9)])
 
-def build_mlp(n_con, n_dis, dis_dims, vocab_sizes):
-    emb_size=20
-    hidden_size=800
+def pre_train(sda_layers, train_data):
+    batch_size = 1
+    nb_epoch = 15
+    sda_layers = [train_data.shape[1]] + sda_layers
+    trained_encoders, trained_decoders = [], []
+    for i, (n_in, n_out) in enumerate(zip(sda_layers[:-1], sda_layers[1:]), start=1):
+        print 'Pre-training Layer %d: %d --> %d' % (i, n_in, n_out)
+        encoder = containers.Sequential([Dense(input_dim=n_in, output_dim=n_out, activation='tanh')])
+        decoder = Dense(input_dim=n_out, output_dim=n_in, activation='tanh')
+        autoencoder = AutoEncoder(encoder=encoder, decoder=decoder, output_reconstruction=True)
+
+        # Train an AutoEncoder
+        ae = Sequential()
+        ae.add(autoencoder)
+        ae.compile(loss='mean_squared_error', optimizer='rmsprop')
+        ae.fit(train_data, train_data, batch_size=batch_size, nb_epoch=nb_epoch, verbose=0)
+        trained_encoders.append(ae.layers[0].encoder)
+        # Prepare input for next AutoEncoder
+        autoencoder.output_reconstruction=False
+        ae.compile(loss='mean_squared_error', optimizer='rmsprop')
+        train_data = ae.predict(train_data)
+    return trained_encoders
+
+def build_mlp(n_con, n_dis, dis_dims, vocab_sizes, trained_encoders):
+    emb_size=10
+    hidden_size=500
     assert(n_dis == len(dis_dims) == len(vocab_sizes))
     # Define a graph
     network = Graph()
@@ -40,19 +67,23 @@ def build_mlp(n_con, n_dis, dis_dims, vocab_sizes):
     # Input Layer
     input_layers = []
     network.add_input(name='con_input', input_shape=(n_con,))
-    input_layers.append('con_input')
+    for i, encoder in enumerate(trained_encoders):
+        if i == 0:
+            network.add_node(encoder, name='encoder%d' % i, input='con_input')
+        else:
+            network.add_node(encoder, name='encoder%d' % i, input='encoder%d' % (i-1))
+    input_layers.append('encoder%d' % (len(trained_encoders)-1))
     for i in range(n_dis):
         network.add_input(name='emb_input%d' % i, input_shape=(dis_dims[i],), dtype=int)
         network.add_node(Embedding(input_dim=vocab_sizes[i], output_dim=emb_size, input_length=dis_dims[i]), name='emb%d' % i, input='emb_input%d' % i)
-        network.add_node(Flatten(), name='re_emb%d' % i, input='emb%d' % i)
-        input_layers.append('re_emb%d' % i)
+        network.add_node(Flatten(), name='fla_emb%d' % i, input='emb%d' % i)
+        input_layers.append('fla_emb%d' % i)
     
     # Hidden Layer
-    network.add_node(layer=Dense(hidden_size), name='hidden1', inputs=input_layers, merge_mode='concat')
-    network.add_node(Activation('relu'), name='hidden1_act', input='hidden1')
+    network.add_node(layer=Dense(hidden_size, activation='relu'), name='hidden1', inputs=input_layers, merge_mode='concat')
 
     # Ouput Layer
-    network.add_node(Dense(2), name='hidden2', input='hidden1_act')
+    network.add_node(Dense(2), name='hidden2', input='hidden1')
     network.add_output(name='output', input='hidden2')
 
     return network
@@ -161,14 +192,20 @@ def main(num_epochs=500):
         vocab_sizes.append(vocab_size)
 
     print 'Building model and compiling functions ...'
-    # Define network structure
-    network = build_mlp(n_con, n_dis, dis_dims, vocab_sizes)
-
-    network.compile(loss={'output': 'mean_squared_error'}, optimizer=SGD(lr=1e-4, momentum=0.9, nesterov=True))
     
+    # Pre-training
+    sda_layers = [40, 30, 20, 10]
+    trained_encoders = pre_train(sda_layers, np.vstack((tr_feature, te_feature)).copy())
+    
+    network = build_mlp(n_con, n_dis, dis_dims, vocab_sizes, trained_encoders)
+
+    network.compile(loss={'output': 'mean_squared_error'}, optimizer=Adagrad())
+
+    plot(network, to_file='visualize/model_sda.png')
+
     # Build network
 
-    pickle_name = 'MLP-0.01.pickle'
+    network_name = 'MLP-Sda-0.1'
 
     mul_val = 10000.
     lon_offset = np.mean(tr_label[:, 0])
@@ -179,18 +216,18 @@ def main(num_epochs=500):
     tr_label[:, 0] = (tr_label[:, 0] - lon_offset) * mul_val 
     tr_label[:, 1] = (tr_label[:, 1] - lat_offset) * mul_val 
     tr_label = tr_label.astype(np.float32)
-    print tr_label
 
     is_train = True
     if is_train:
-        build_log = network.fit(tr_input, nb_epoch=100, batch_size=10, verbose=1)
+        build_log = network.fit(tr_input, nb_epoch=500, batch_size=10, verbose=1)
         # Dump Network
-        with open('model/'+pickle_name, 'wb') as f:
-           pickle.dump(network, f, -1)
+        json_string = network.to_json()
+        open('model/' + network_name + '.json', 'w').write(json_string)
+        network.save_weights('model/' + network_name + '.h5', overwrite=True)
     else:
         # Load Network
-        f = open('model/'+pickle_name)
-        network = pickle.load(f) 
+        network = model_from_json(open('model/' + network_name + '.json').read())
+        network.load_weights('model/' + network_name + '.h5')
 
     # Make prediction
     te_pred = network.predict(te_input)['output']
@@ -202,7 +239,7 @@ def main(num_epochs=500):
         f_out.write('%f,%f,%f,%f\n' % (pred_pt[0], pred_pt[1], true_pt[0], true_pt[1]))
 
     # Generate report
-    gen_report(te_label, te_pred, pickle_name)
+    gen_report(te_label, te_pred, network_name)
 
 if __name__ == '__main__':
     main()
