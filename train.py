@@ -189,7 +189,7 @@ def main(optimizer, batch_size, hidden_size):
     # Build network
     pickle_name = 'MLP-0.2.pickle'
 
-    is_train = True
+    is_train = False
     if is_train:
         history = network.fit(tr_input, nb_epoch=500, batch_size=batch_size, verbose=1)
         # Dump Network
@@ -202,18 +202,18 @@ def main(optimizer, batch_size, hidden_size):
     plot(network, to_file='model.png')
 
     # Make prediction
-    te_pred = np.asarray(network.predict(te_input)['output'])
     ## 1. weighted
-    te_pred = te_pred.dot(grid_info)
+#    te_pred = np.asarray(network.predict(te_input)['output'])
+#    te_pred = te_pred.dot(grid_info)
     # Generate report
-    gen_report(te_label, te_pred, pickle_name, [type(optimizer), batch_size, hidden_size, 'Weighted'])
+#    gen_report(te_label, te_pred, pickle_name, [type(optimizer), batch_size, hidden_size, 'Weighted'])
 
     ## 2. argmax
-#    te_pred = np.asarray(network.predict(te_input)['output'])
-#    te_pred = np.argmax(te_pred, axis=1)
-#    te_pred = [grid_info[idx] for idx in te_pred]
+    te_pred = np.asarray(network.predict(te_input)['output'])
+    te_pred = np.argmax(te_pred, axis=1)
+    te_pred = [grid_info[idx] for idx in te_pred]
     # Generate report
-#    gen_report(te_label, te_pred, pickle_name, [type(optimizer), batch_size, hidden_size, 'Argmax'])
+    gen_report(te_label, te_pred, pickle_name, [type(optimizer), batch_size, hidden_size, 'Argmax'])
         
     f_out = open('pred.csv', 'w')
     for pred_pt, true_pt in zip(te_pred, te_label):

@@ -58,3 +58,4 @@
 <class 'keras.optimizers.Adagrad'>,50,500,Argmax,5384,1119.1,0.7,84.4615527489,49.7,76.6,110.4,183.2
 <class 'keras.optimizers.Adagrad'>,50,500,Weighted,5384,1013.5,0.3,76.7044576523,50.55,76.8,111.2,168.2
 <class 'keras.optimizers.Adagrad'>,50,500,Weighted,5384,991.5,0.2,77.2968796434,50.05,77.5,111.6,172.0
+<class 'keras.optimizers.Adagrad'>,50,500,Argmax,5384,1096.4,0.1,84.1137444279,47.5,76.6,112.5,187.5
